@@ -35,12 +35,19 @@
       </header>
 
       <main>
-        <section id="stage"></section>
+        <section id="stage">
+          <div id="zone-title" class="overlay">-</div>
+          <ul id="log" class="overlay"></ul>
+          <div id="cam-controls" class="overlay">
+            <button id="zoom-in" title="Aproximar (roda do mouse)">+</button>
+            <button id="zoom-out" title="Afastar (roda do mouse)">−</button>
+            <button id="recenter" title="Centralizar no Shinigami">◎</button>
+          </div>
+          <div id="cam-hint" class="overlay">WASD para olhar em volta</div>
+        </section>
         <aside id="side">
           <h2>Zonas de caça</h2>
           <ul id="zones"></ul>
-          <h2>Registro</h2>
-          <ul id="log"></ul>
         </aside>
       </main>
 

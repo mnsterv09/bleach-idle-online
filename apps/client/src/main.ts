@@ -91,7 +91,8 @@ function updatePlayer(p: PlayerSnapshot): void {
   if (zoneChanged || levelChanged) renderZones();
   if (zoneChanged) {
     const z = zones.find((z) => z.id === p.zoneId);
-    scene.setZone(p.zoneId, z?.name ?? p.zoneId);
+    $("zone-title").textContent = z?.name ?? p.zoneId;
+    scene.setZone(p.zoneId);
   }
 }
 
@@ -120,7 +121,7 @@ function log(text: string, cls?: string): void {
   li.textContent = text;
   if (cls) li.className = cls;
   ul.prepend(li);
-  while (ul.children.length > 50) ul.lastElementChild?.remove();
+  while (ul.children.length > 6) ul.lastElementChild?.remove();
 }
 
 function showGame(): void {
@@ -140,6 +141,10 @@ $<HTMLFormElement>("login-form").addEventListener("submit", (ev) => {
   $("login-error").textContent = "";
   socket.connect();
 });
+
+$("zoom-in").addEventListener("click", () => scene.zoomBy(1));
+$("zoom-out").addEventListener("click", () => scene.zoomBy(-1));
+$("recenter").addEventListener("click", () => scene.recenter());
 
 // Com token salvo, entra direto; sem token, mostra o login.
 if (loadToken()) socket.connect();

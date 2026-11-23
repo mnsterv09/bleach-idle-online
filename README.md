@@ -65,6 +65,7 @@ docker compose up --build    # http://localhost:8080
 
 - Login como convidado (nome único; token de sessão salvo no navegador, só o hash no banco).
 - Caça automática: a cada tick (1 s) o Shinigami ataca o Hollow atual; abates dão XP e Kan; sobe de nível.
+- Câmera no estilo do gênero: mapa de tiles visto de cima, câmera que segue o Shinigami, zoom (+/−, roda do mouse) e WASD/setas para olhar em volta (volta sozinha). Andar até o alvo ainda é só visual no cliente.
 - Zonas com nível mínimo (Karakura Town, Rukongai, Floresta de Menos, Hueco Mundo).
 - Meditação (treino offline): ao voltar, ganha 25% da taxa online por até 8 h, calculado no servidor.
 - Uma sessão por conta, limite de mensagens por conexão, validação de toda mensagem do cliente.
