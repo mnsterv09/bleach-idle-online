@@ -1,9 +1,12 @@
 import { Application, Container, Graphics, Text } from "pixi.js";
-import type { EnemySnapshot, GameEvent } from "@bio/shared";
+import { gridToIso, isoDepth, isoToTile, ISO_TILE_H, ISO_TILE_W, type EnemySnapshot, type GameEvent } from "@bio/shared";
 
 /**
- * Cena de caça no estilo do gênero: mapa de tiles visto de cima, câmera que
- * segue o Shinigami, zoom e WASD para olhar em volta. Arte 100% provisória
+ * Cena de caça com câmera isométrica: mapa de tiles em losango (2:1), câmera
+ * que segue o Shinigami, zoom e WASD para olhar em volta.
+ *
+ * A lógica (posições, distâncias, movimento) roda numa grade quadrada em
+ * "pixels de grade" (TILE por tile). Só o desenho passa por gridToIso(). Arte 100% provisória
  * (formas geométricas), gerada por código.
  *
  * O combate (dano, abates, XP) vem do servidor. Andar pelo mapa até o alvo
@@ -20,6 +23,14 @@ const ATTACK_RANGE = 44;
 const ZOOMS = [1, 1.5, 2, 2.5, 3];
 const PAN_SPEED = 420; // px/s em coordenadas do mundo
 const PAN_RETURN_MS = 2500;
+
+/** Pixels de grade → tela isométrica (espaço do mundo). */
+function iso(x: number, y: number): { x: number; y: number } {
+  return gridToIso(x / TILE, y / TILE);
+}
+function depth(x: number, y: number): number {
+  return isoDepth(x / TILE, y / TILE);
+}
 
 interface Palette {
   ground: number[];
@@ -77,6 +88,9 @@ export class HuntScene {
   private app = new Application();
   private world = new Container();
   private ground = new Graphics();
+  private hover = new Graphics();
+  /** Chamado ao clicar num tile (ex.: futuro "andar até aqui"). */
+  onTileClick: (tx: number, ty: number) => void = () => {};
   private actors = new Container(); // ordenados por y para profundidade
   private fx = new Container();
   private player = new Container();
@@ -107,7 +121,7 @@ export class HuntScene {
     el.prepend(this.app.canvas);
 
     this.actors.sortableChildren = true;
-    this.world.addChild(this.ground, this.actors, this.fx);
+    this.world.addChild(this.ground, this.hover, this.actors, this.fx);
     this.app.stage.addChild(this.world);
 
     this.player.addChild(drawShinigami());
@@ -122,6 +136,19 @@ export class HuntScene {
       },
       { passive: false },
     );
+    // Tile sob o mouse: tela → mundo → grade
+    const tileAt = (e: PointerEvent) => {
+      const rect = this.app.canvas.getBoundingClientRect();
+      const local = this.world.toLocal({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      const t = isoToTile(local.x, local.y);
+      return t.x >= 0 && t.y >= 0 && t.x < MAP_W && t.y < MAP_H ? t : null;
+    };
+    this.app.canvas.addEventListener("pointermove", (e) => this.drawHover(tileAt(e)));
+    this.app.canvas.addEventListener("pointerleave", () => this.drawHover(null));
+    this.app.canvas.addEventListener("click", (e) => {
+      const t = tileAt(e);
+      if (t) this.onTileClick(t.x, t.y);
+    });
     // WASD / setas para olhar em volta
     window.addEventListener("keydown", (e) => {
       if (isTyping(e)) return;
@@ -175,20 +202,26 @@ export class HuntScene {
     for (const ev of events) {
       if (ev.kind === "hit") {
         this.lunge = 1;
-        if (this.target) this.float(`-${ev.damage}`, 0xffffff, this.target.x + 14, this.target.y - 36);
+        if (this.target) this.float(`-${ev.damage}`, 0xffffff, this.target.x, this.target.y, -40);
       } else if (ev.kind === "kill") {
         if (this.target) {
-          this.float(`+${ev.xp} XP  +${ev.kan} Kan`, 0xffb347, this.target.x, this.target.y - 56);
+          this.float(`+${ev.xp} XP  +${ev.kan} Kan`, 0xffb347, this.target.x, this.target.y, -58);
           this.target.dying = 1;
           this.target.label.visible = false;
           this.target.hp.visible = false;
         }
         this.target = null;
       } else if (ev.kind === "levelUp") {
-        this.float(`Nível ${ev.level}!`, 0x5ad19a, this.px, this.py - 50);
+        this.float(`Nível ${ev.level}!`, 0x5ad19a, this.px, this.py, -50);
       }
     }
     this.setEnemy(enemy);
+  }
+
+  private drawHover(t: { x: number; y: number } | null): void {
+    this.hover.clear();
+    if (!t) return;
+    diamond(this.hover, t.x, t.y).fill({ color: 0xffffff, alpha: 0.12 }).stroke({ width: 1.5, color: 0xffffff, alpha: 0.7 });
   }
 
   // ---------------------------------------------------------------- mapa
@@ -204,15 +237,20 @@ export class HuntScene {
     for (let y = 0; y < MAP_H; y++) {
       for (let x = 0; x < MAP_W; x++) {
         const color = isPath(x, y) ? pick(pal.path, r()) : pick(pal.ground, r());
-        g.rect(x * TILE, y * TILE, TILE, TILE).fill(color);
+        diamond(g, x, y).fill(color);
         // detalhes do chão (tufos/pedrinhas)
         if (!isPath(x, y) && r() < 0.18) {
-          g.rect(x * TILE + 6 + r() * 18, y * TILE + 6 + r() * 18, 3, 3).fill({ color: 0x000000, alpha: 0.12 });
+          const d = gridToIso(x + 0.25 + r() * 0.5, y + 0.25 + r() * 0.5);
+          g.rect(d.x - 2, d.y - 1, 4, 2).fill({ color: 0x000000, alpha: 0.15 });
         }
       }
     }
-    // borda escura do mapa
-    g.rect(0, 0, MAP_W * TILE, MAP_H * TILE).stroke({ width: 6, color: 0x000000, alpha: 0.35 });
+    // borda do mapa (losango externo) e uma "espessura" de terreno embaixo
+    const a = gridToIso(0, 0), b = gridToIso(MAP_W, 0), c = gridToIso(MAP_W, MAP_H), d = gridToIso(0, MAP_H);
+    const depthPx = 14;
+    g.poly([d.x, d.y, c.x, c.y, c.x, c.y + depthPx, d.x, d.y + depthPx]).fill(0x2a1e14);
+    g.poly([c.x, c.y, b.x, b.y, b.x, b.y + depthPx, c.x, c.y + depthPx]).fill(0x3a2a1c);
+    g.poly([a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y]).stroke({ width: 2, color: 0x000000, alpha: 0.35 });
 
     // Árvores e pedras como atores (ordenados por y junto com os personagens)
     for (const c of [...this.actors.children]) if (c !== this.player) c.destroy({ children: true });
@@ -224,8 +262,9 @@ export class HuntScene {
       const cy = ty * TILE + TILE / 2;
       if (Math.hypot(cx - (MAP_W * TILE) / 2, cy - (MAP_H * TILE) / 2) < TILE * 4) continue;
       const deco = r() < 0.8 ? drawTree(pal, r) : drawRock(pal);
-      deco.position.set(cx, cy);
-      deco.zIndex = cy;
+      const s = iso(cx, cy);
+      deco.position.set(s.x, s.y);
+      deco.zIndex = depth(cx, cy);
       this.actors.addChild(deco);
     }
   }
@@ -312,7 +351,8 @@ export class HuntScene {
       const dx = t.x - this.px;
       const dy = t.y - this.py;
       const d = Math.hypot(dx, dy);
-      if (Math.abs(dx) > 2) this.facing = Math.sign(dx);
+      const sdx = dx - dy; // direção horizontal na tela isométrica
+      if (Math.abs(sdx) > 2) this.facing = Math.sign(sdx);
       if (d > ATTACK_RANGE) {
         const step = Math.min(d - ATTACK_RANGE, PLAYER_SPEED * dt);
         this.px += (dx / d) * step;
@@ -321,9 +361,10 @@ export class HuntScene {
     }
     this.lunge = Math.max(0, this.lunge - dtMs / 220);
     const lungeOffset = Math.sin(this.lunge * Math.PI) * 10 * this.facing;
-    this.player.position.set(Math.round(this.px + lungeOffset), Math.round(this.py));
+    const ps = iso(this.px, this.py);
+    this.player.position.set(Math.round(ps.x + lungeOffset), Math.round(ps.y));
     this.player.scale.x = this.facing;
-    this.player.zIndex = this.py;
+    this.player.zIndex = depth(this.px, this.py);
 
     // Hollows vagando; o alvo fica parado esperando a luta
     for (const w of this.wanderers) {
@@ -347,8 +388,9 @@ export class HuntScene {
           w.wait = 1 + Math.random() * 3;
         }
       }
-      w.view.position.set(Math.round(w.x), Math.round(w.y + Math.sin(performance.now() / 300 + w.x) * 1.5));
-      w.view.zIndex = w.y;
+      const ws = iso(w.x, w.y);
+      w.view.position.set(Math.round(ws.x), Math.round(ws.y + Math.sin(performance.now() / 300 + w.x) * 1.5));
+      w.view.zIndex = depth(w.x, w.y);
     }
 
     // Câmera: segue o Shinigami com suavização; WASD desloca; volta sozinha
@@ -371,15 +413,22 @@ export class HuntScene {
     const targetZoom = ZOOMS[this.zoomIndex]!;
     this.zoom += (targetZoom - this.zoom) * (1 - Math.exp(-dt * 10));
 
+    // A câmera trabalha no espaço da tela isométrica; o pan (WASD) é em
+    // direções de tela: W sobe na tela, D vai para a direita.
     const follow = 1 - Math.exp(-dt * 6);
-    this.camX += (this.px + this.panX - this.camX) * follow;
-    this.camY += (this.py + this.panY - this.camY) * follow;
+    const focus = iso(this.px, this.py);
+    this.camX += (focus.x + this.panX - this.camX) * follow;
+    this.camY += (focus.y + this.panY - this.camY) * follow;
 
     const { width, height } = this.app.screen;
     const halfW = width / 2 / this.zoom;
     const halfH = height / 2 / this.zoom;
-    const cx = clampCenter(this.camX, halfW, MAP_W * TILE);
-    const cy = clampCenter(this.camY, halfH, MAP_H * TILE);
+    // Caixa que contém o losango do mapa
+    const minX = -MAP_H * (ISO_TILE_W / 2);
+    const maxX = MAP_W * (ISO_TILE_W / 2);
+    const maxY = (MAP_W + MAP_H) * (ISO_TILE_H / 2);
+    const cx = minX + clampCenter(this.camX - minX, halfW, maxX - minX);
+    const cy = clampCenter(this.camY, halfH, maxY);
     this.world.scale.set(this.zoom);
     this.world.pivot.set(cx, cy);
     this.world.position.set(Math.round(width / 2), Math.round(height / 2));
@@ -393,11 +442,13 @@ export class HuntScene {
     this.floaters = this.floaters.filter((f) => f.life > 0);
   }
 
-  private float(text: string, color: number, x: number, y: number): void {
+  /** x, y em pixels de grade; dy desloca na tela (para cima = negativo). */
+  private float(text: string, color: number, x: number, y: number, dy = 0): void {
+    const s = iso(x, y);
     const t = new Text({ text, style: { fill: color, fontSize: 12, fontWeight: "bold", stroke: { color: 0x000000, width: 3 } } });
     t.resolution = 3;
     t.anchor.set(0.5);
-    t.position.set(x, y);
+    t.position.set(s.x, s.y + dy);
     this.fx.addChild(t);
     this.floaters.push({ text: t, life: 1 });
   }
@@ -449,6 +500,15 @@ function drawRock(pal: Palette): Container {
   g.rect(-5, -6, 6, 2).fill({ color: 0xffffff, alpha: 0.15 });
   c.addChild(g);
   return c;
+}
+
+/** Desenha o losango do tile (tx, ty) no Graphics. */
+function diamond(g: Graphics, tx: number, ty: number): Graphics {
+  const t = gridToIso(tx, ty);
+  const r = gridToIso(tx + 1, ty);
+  const b = gridToIso(tx + 1, ty + 1);
+  const l = gridToIso(tx, ty + 1);
+  return g.poly([t.x, t.y, r.x, r.y, b.x, b.y, l.x, l.y]);
 }
 
 function clamp(v: number, min: number, max: number): number {
