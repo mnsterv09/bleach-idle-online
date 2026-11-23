@@ -1,0 +1,27 @@
+{
+  "name": "bleach-idle-online",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Bleach Idle Online: fangame idle MMO de navegador (sem vínculo oficial com Bleach).",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @bio/shared && concurrently -n server,client -c red,cyan \"npm run dev -w @bio/server\" \"npm run dev -w @bio/client\"",
+    "build": "npm run build -w @bio/shared && npm run build -w @bio/server && npm run build -w @bio/client",
+    "typecheck": "npm run build -w @bio/shared && npm run typecheck --workspaces --if-present",
+    "test": "npm run build -w @bio/shared && vitest run",
+    "db:migrate": "npm run migrate -w @bio/server"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "concurrently": "^10.0.7",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  }
+}
