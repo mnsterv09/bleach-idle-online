@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bleach Idle Online (fangame)</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="login" class="screen">
+      <div class="card">
+        <h1>Bleach Idle Online</h1>
+        <p class="tag">Idle MMO de navegador · protótipo</p>
+        <form id="login-form">
+          <label for="name">Nome do seu Shinigami</label>
+          <input id="name" name="name" minlength="3" maxlength="16" autocomplete="off" required />
+          <button type="submit">Entrar</button>
+        </form>
+        <p id="login-error" class="error" role="alert"></p>
+        <p class="disclaimer" data-disclaimer></p>
+      </div>
+    </div>
+
+    <div id="game" class="screen hidden">
+      <header id="hud">
+        <div><span class="label">Shinigami</span> <strong id="hud-name">-</strong></div>
+        <div><span class="label">Nível</span> <strong id="hud-level">1</strong></div>
+        <div class="xp">
+          <div class="bar"><div id="hud-xp-fill"></div></div>
+          <span id="hud-xp">0 / 0</span>
+        </div>
+        <div><span class="label">Kan</span> <strong id="hud-kan">0</strong></div>
+        <div><span class="label">Online</span> <strong id="hud-online">0</strong></div>
+        <div id="hud-status" class="status">conectando…</div>
+      </header>
+
+      <main>
+        <section id="stage"></section>
+        <aside id="side">
+          <h2>Zonas de caça</h2>
+          <ul id="zones"></ul>
+          <h2>Registro</h2>
+          <ul id="log"></ul>
+        </aside>
+      </main>
+
+      <footer class="disclaimer" data-disclaimer></footer>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

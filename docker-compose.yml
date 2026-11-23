@@ -1,0 +1,51 @@
+# Sobe tudo: docker compose up --build  → http://localhost:8080
+# Só banco e Redis para desenvolvimento local: docker compose up -d postgres redis
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bleach
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bleach}
+      POSTGRES_DB: bleach
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bleach"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgres://bleach:${POSTGRES_PASSWORD:-bleach}@postgres:5432/bleach
+      REDIS_URL: redis://redis:6379
+      TICK_MS: 1000
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.web
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports: ["8080:80"]
+    depends_on: [server]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
